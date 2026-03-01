@@ -23,6 +23,7 @@ const THEMES = {
     textBright: "#e6edf3",
     empty: "#161b22",
     border: "#30363d",
+    levels: ["#161b22", "#0e4429", "#006d32", "#26a641", "#39d353"],
   },
   light: {
     bg: "#ffffff",
@@ -30,8 +31,52 @@ const THEMES = {
     textBright: "#1f2328",
     empty: "#ebedf0",
     border: "#d0d7de",
+    levels: ["#ebedf0", "#9be9a8", "#40c463", "#30a14e", "#216e39"],
   },
 };
+
+/**
+ * Compute contribution level (0-4) using quartile-based thresholds,
+ * matching GitHub's actual rendering logic.
+ */
+function computeContributionLevels(data: ContributionData): Map<string, number> {
+  const nonZeroCounts: number[] = [];
+  for (const week of data.weeks) {
+    for (const day of week.contributionDays) {
+      if (day.contributionCount > 0) {
+        nonZeroCounts.push(day.contributionCount);
+      }
+    }
+  }
+
+  nonZeroCounts.sort((a, b) => a - b);
+
+  // GitHub uses quartile boundaries on non-zero days
+  const q1 = nonZeroCounts[Math.floor(nonZeroCounts.length * 0.25)] ?? 1;
+  const q2 = nonZeroCounts[Math.floor(nonZeroCounts.length * 0.50)] ?? 2;
+  const q3 = nonZeroCounts[Math.floor(nonZeroCounts.length * 0.75)] ?? 3;
+
+  const levelMap = new Map<string, number>();
+  for (const week of data.weeks) {
+    for (const day of week.contributionDays) {
+      let level: number;
+      if (day.contributionCount === 0) {
+        level = 0;
+      } else if (day.contributionCount <= q1) {
+        level = 1;
+      } else if (day.contributionCount <= q2) {
+        level = 2;
+      } else if (day.contributionCount <= q3) {
+        level = 3;
+      } else {
+        level = 4;
+      }
+      levelMap.set(day.date, level);
+    }
+  }
+
+  return levelMap;
+}
 
 function escapeXml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -121,6 +166,9 @@ export function generateSvg(data: ContributionData, options: SvgOptions = {}): s
     }
   }
 
+  // Compute contribution levels from actual data distribution
+  const levelMap = computeContributionLevels(data);
+
   // Contribution cells
   for (let w = 0; w < data.weeks.length; w++) {
     const week = data.weeks[w];
@@ -128,7 +176,8 @@ export function generateSvg(data: ContributionData, options: SvgOptions = {}): s
       const day = week.contributionDays[d];
       const x = gridX + w * step;
       const y = gridY + d * step;
-      const color = day.contributionCount === 0 ? theme.empty : day.color;
+      const level = levelMap.get(day.date) ?? 0;
+      const color = theme.levels[level];
 
       parts.push(
         `<rect x="${x}" y="${y}" width="${cellSize}" height="${cellSize}" rx="2" fill="${color}"/>`,
@@ -145,9 +194,7 @@ export function generateSvg(data: ContributionData, options: SvgOptions = {}): s
       `fill="${theme.text}">Less</text>`,
   );
 
-  const legendColors = darkMode
-    ? [theme.empty, "#0e4429", "#006d32", "#26a641", "#39d353"]
-    : [theme.empty, "#9be9a8", "#40c463", "#30a14e", "#216e39"];
+  const legendColors = theme.levels;
 
   for (let i = 0; i < legendColors.length; i++) {
     parts.push(
