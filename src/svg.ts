@@ -94,6 +94,13 @@ export function generateSvg(data: ContributionData, options: SvgOptions = {}): s
     username,
   } = options;
 
+  if (!Number.isInteger(cellSize) || cellSize < 1) {
+    throw new Error("Invalid cellSize: must be a positive integer.");
+  }
+  if (!Number.isInteger(cellGap) || cellGap < 0) {
+    throw new Error("Invalid cellGap: must be a non-negative integer.");
+  }
+
   const theme = darkMode ? THEMES.dark : THEMES.light;
   const step = cellSize + cellGap;
 

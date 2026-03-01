@@ -1,11 +1,21 @@
 #!/usr/bin/env node
 
-import { Command } from "commander";
+import { Command, InvalidArgumentError } from "commander";
 import { fetchContributions } from "./github.js";
 import { generateSvg } from "./svg.js";
 import { render } from "./render.js";
 
 const program = new Command();
+
+function parsePositiveInt(optionName: string): (value: string) => number {
+  return (value: string) => {
+    const parsed = Number(value);
+    if (!Number.isInteger(parsed) || parsed < 1) {
+      throw new InvalidArgumentError(`${optionName} must be a positive integer`);
+    }
+    return parsed;
+  };
+}
 
 program
   .name("gh-heatmap")
@@ -14,10 +24,10 @@ program
   .argument("<username>", "GitHub username")
   .option("-t, --token <token>", "GitHub token (or set GITHUB_TOKEN env var)")
   .option("-o, --output <path>", "Save to file instead of displaying (.png or .svg)")
-  .option("-w, --width <cols>", "Terminal width for display", parseInt)
+  .option("-w, --width <cols>", "Terminal width for display", parsePositiveInt("--width"))
   .option("--light", "Use light theme (default: dark)")
   .option("--no-labels", "Hide month/day labels")
-  .option("--cell-size <px>", "Cell size in pixels", parseInt)
+  .option("--cell-size <px>", "Cell size in pixels", parsePositiveInt("--cell-size"))
   .option("--verbose", "Show debug info about the data fetched")
   .action(async (username: string, opts) => {
     try {
