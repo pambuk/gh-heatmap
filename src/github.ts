@@ -56,6 +56,65 @@ query($username: String!) {
 }
 `;
 
+const GITHUB_GRAPHQL_URL = "https://api.github.com/graphql";
+const REQUEST_TIMEOUT_MS = 15_000;
+const MAX_ATTEMPTS = 3;
+const RETRYABLE_STATUS_CODES = new Set([429, 500, 502, 503, 504]);
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function retryDelayMs(attempt: number): number {
+  return 300 * 2 ** (attempt - 1);
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+async function fetchGitHubGraphql(
+  headers: Record<string, string>,
+  body: string
+): Promise<Response> {
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+    try {
+      const res = await fetch(GITHUB_GRAPHQL_URL, {
+        method: "POST",
+        headers,
+        body,
+        signal: controller.signal,
+      });
+
+      if (RETRYABLE_STATUS_CODES.has(res.status) && attempt < MAX_ATTEMPTS) {
+        await sleep(retryDelayMs(attempt));
+        continue;
+      }
+
+      return res;
+    } catch (error) {
+      if (attempt >= MAX_ATTEMPTS) {
+        if (error instanceof Error && error.name === "AbortError") {
+          throw new Error(
+            `GitHub API request timed out after ${REQUEST_TIMEOUT_MS}ms (tried ${MAX_ATTEMPTS} times).`
+          );
+        }
+        throw new Error(
+          `GitHub API request failed after ${MAX_ATTEMPTS} attempts: ${errorMessage(error)}`
+        );
+      }
+      await sleep(retryDelayMs(attempt));
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  throw new Error("GitHub API request failed.");
+}
+
 export async function fetchContributions(
   username: string,
   token?: string
@@ -69,11 +128,10 @@ export async function fetchContributions(
     headers["Authorization"] = `bearer ${token}`;
   }
 
-  const res = await fetch("https://api.github.com/graphql", {
-    method: "POST",
+  const res = await fetchGitHubGraphql(
     headers,
-    body: JSON.stringify({ query: QUERY, variables: { username } }),
-  });
+    JSON.stringify({ query: QUERY, variables: { username } })
+  );
 
   if (!res.ok) {
     const body = await res.text();
