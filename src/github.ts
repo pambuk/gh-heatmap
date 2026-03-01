@@ -13,10 +13,34 @@ export interface ContributionData {
   weeks: ContributionWeek[];
 }
 
+export interface FetchResult {
+  data: ContributionData;
+  debug: {
+    apiTotal: number;
+    summedTotal: number;
+    restrictedCount: number;
+    commits: number;
+    issues: number;
+    prs: number;
+    reviews: number;
+    repos: number;
+    firstDate: string;
+    lastDate: string;
+    weeksCount: number;
+    daysCount: number;
+  };
+}
+
 const QUERY = `
 query($username: String!) {
   user(login: $username) {
     contributionsCollection {
+      restrictedContributionsCount
+      totalCommitContributions
+      totalIssueContributions
+      totalPullRequestContributions
+      totalPullRequestReviewContributions
+      totalRepositoryContributions
       contributionCalendar {
         totalContributions
         weeks {
@@ -35,7 +59,7 @@ query($username: String!) {
 export async function fetchContributions(
   username: string,
   token?: string
-): Promise<ContributionData> {
+): Promise<FetchResult> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     "User-Agent": "gh-heatmap-cli",
@@ -64,7 +88,19 @@ export async function fetchContributions(
   }
 
   const json = (await res.json()) as {
-    data?: { user?: { contributionsCollection: { contributionCalendar: ContributionData } } };
+    data?: {
+      user?: {
+        contributionsCollection: {
+          restrictedContributionsCount: number;
+          totalCommitContributions: number;
+          totalIssueContributions: number;
+          totalPullRequestContributions: number;
+          totalPullRequestReviewContributions: number;
+          totalRepositoryContributions: number;
+          contributionCalendar: ContributionData;
+        };
+      };
+    };
     errors?: { message: string }[];
   };
 
@@ -76,5 +112,27 @@ export async function fetchContributions(
     throw new Error(`User "${username}" not found on GitHub.`);
   }
 
-  return json.data.user.contributionsCollection.contributionCalendar;
+  const c = json.data.user.contributionsCollection;
+  const data = c.contributionCalendar;
+
+  const allDays = data.weeks.flatMap((w) => w.contributionDays);
+  const summedTotal = allDays.reduce((sum, d) => sum + d.contributionCount, 0);
+
+  return {
+    data,
+    debug: {
+      apiTotal: data.totalContributions,
+      summedTotal,
+      restrictedCount: c.restrictedContributionsCount,
+      commits: c.totalCommitContributions,
+      issues: c.totalIssueContributions,
+      prs: c.totalPullRequestContributions,
+      reviews: c.totalPullRequestReviewContributions,
+      repos: c.totalRepositoryContributions,
+      firstDate: allDays[0]?.date ?? "N/A",
+      lastDate: allDays[allDays.length - 1]?.date ?? "N/A",
+      weeksCount: data.weeks.length,
+      daysCount: allDays.length,
+    },
+  };
 }

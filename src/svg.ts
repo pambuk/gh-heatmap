@@ -36,37 +36,40 @@ const THEMES = {
 };
 
 /**
- * Compute contribution level (0-4) using quartile-based thresholds,
- * matching GitHub's actual rendering logic.
+ * Compute contribution level (0-4) using proportional thresholds based
+ * on the max contribution count. This distributes color levels evenly
+ * across the full range, giving visual variety in both sparse and
+ * active periods.
  */
 function computeContributionLevels(data: ContributionData): Map<string, number> {
-  const nonZeroCounts: number[] = [];
+  let max = 0;
   for (const week of data.weeks) {
     for (const day of week.contributionDays) {
-      if (day.contributionCount > 0) {
-        nonZeroCounts.push(day.contributionCount);
+      if (day.contributionCount > max) {
+        max = day.contributionCount;
       }
     }
   }
 
-  nonZeroCounts.sort((a, b) => a - b);
+  if (max === 0) max = 1;
 
-  // GitHub uses quartile boundaries on non-zero days
-  const q1 = nonZeroCounts[Math.floor(nonZeroCounts.length * 0.25)] ?? 1;
-  const q2 = nonZeroCounts[Math.floor(nonZeroCounts.length * 0.50)] ?? 2;
-  const q3 = nonZeroCounts[Math.floor(nonZeroCounts.length * 0.75)] ?? 3;
+  // Thresholds at 25%, 50%, 75% of max
+  const t1 = Math.ceil(max * 0.25);
+  const t2 = Math.ceil(max * 0.50);
+  const t3 = Math.ceil(max * 0.75);
 
   const levelMap = new Map<string, number>();
   for (const week of data.weeks) {
     for (const day of week.contributionDays) {
       let level: number;
-      if (day.contributionCount === 0) {
+      const c = day.contributionCount;
+      if (c === 0) {
         level = 0;
-      } else if (day.contributionCount <= q1) {
+      } else if (c <= t1) {
         level = 1;
-      } else if (day.contributionCount <= q2) {
+      } else if (c <= t2) {
         level = 2;
-      } else if (day.contributionCount <= q3) {
+      } else if (c <= t3) {
         level = 3;
       } else {
         level = 4;
