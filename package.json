@@ -1,0 +1,24 @@
+{
+  "name": "gh-heatmap",
+  "version": "0.1.0",
+  "description": "Display GitHub contribution heatmap as an image in your terminal",
+  "type": "module",
+  "bin": {
+    "gh-heatmap": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsc && node dist/index.js"
+  },
+  "keywords": ["github", "cli", "terminal", "heatmap", "contributions"],
+  "license": "MIT",
+  "dependencies": {
+    "@resvg/resvg-js": "^2.6.2",
+    "commander": "^13.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "typescript": "^5.8.3"
+  }
+}
