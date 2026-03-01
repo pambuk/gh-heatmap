@@ -25,6 +25,7 @@ git clone <repo-url>
 cd gh-heatmap
 npm install
 npm run build
+npm test
 
 # Set your token
 export GITHUB_TOKEN=ghp_your_token_here
