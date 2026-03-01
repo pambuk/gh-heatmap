@@ -46,6 +46,28 @@ function displayWithChafa(pngBuffer: Buffer, width?: number): void {
   }
 }
 
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function saveFallbackPng(pngBuffer: Buffer, reason: "missing" | "failed", err?: unknown): void {
+  const fallbackPath = join(process.cwd(), "gh-heatmap.png");
+  writeFileSync(fallbackPath, pngBuffer);
+
+  const reasonLine =
+    reason === "missing"
+      ? "chafa not found"
+      : `chafa failed at runtime (${errorMessage(err)})`;
+
+  console.error(
+    `${reasonLine} — saved image to gh-heatmap.png\n` +
+      "Install chafa for terminal display:\n" +
+      "  brew install chafa        # macOS\n" +
+      "  apt install chafa         # Debian/Ubuntu\n" +
+      "  pacman -S chafa           # Arch\n"
+  );
+}
+
 export function render(svg: string, options: RenderOptions = {}): void {
   const png = svgToPng(svg);
 
@@ -62,18 +84,14 @@ export function render(svg: string, options: RenderOptions = {}): void {
 
   // Try chafa for terminal display
   if (hasChafa()) {
-    displayWithChafa(png, options.width);
+    try {
+      displayWithChafa(png, options.width);
+    } catch (err) {
+      saveFallbackPng(png, "failed", err);
+    }
     return;
   }
 
   // Fallback: save to file and tell user
-  const fallbackPath = join(process.cwd(), "gh-heatmap.png");
-  writeFileSync(fallbackPath, png);
-  console.error(
-    "chafa not found — saved image to gh-heatmap.png\n" +
-      "Install chafa for terminal display:\n" +
-      "  brew install chafa        # macOS\n" +
-      "  apt install chafa         # Debian/Ubuntu\n" +
-      "  pacman -S chafa           # Arch\n"
-  );
+  saveFallbackPng(png, "missing");
 }
